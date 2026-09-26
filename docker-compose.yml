@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: negotia-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql+asyncpg://negotia:negotia_secure_password_2026@postgres:5432/negotia_db
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=negotia-super-secret-enterprise-production-key-2026
+      - LYZR_API_KEY=${LYZR_API_KEY:-}
+      - SIMULATION_MODE=true
+      - CORS_ORIGINS=["*"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: negotia-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: negotia
+      POSTGRES_PASSWORD: negotia_secure_password_2026
+      POSTGRES_DB: negotia_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U negotia -d negotia_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: negotia-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:

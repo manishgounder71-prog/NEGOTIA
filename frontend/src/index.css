@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-primary: #08090B;
+    --bg-secondary: #0D0F13;
+    --panel: #111419;
+    --panel-elevated: #151920;
+    --panel-border: rgba(255, 255, 255, 0.08);
+    --panel-border-hover: rgba(255, 255, 255, 0.16);
+    
+    --text-primary: #F5F7FA;
+    --text-secondary: #9BA3AF;
+    --text-muted: #5F6875;
+    
+    --accent-blue: #3B82F6;
+    --accent-indigo: #6366F1;
+    --accent-emerald: #10B981;
+    --accent-amber: #F59E0B;
+    --accent-red: #EF4444;
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-feature-settings: 'tnum' on, 'zero' on;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #08090B;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1E232D;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2D3748;
+}
+
+/* Precise subtle utility classes */
+.panel {
+  background-color: #111419;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.panel-elevated {
+  background-color: #151920;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.panel-hover {
+  transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.panel-hover:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+/* Custom pulse indicator */
+@keyframes subtle-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.08); }
+}
+
+.animate-subtle-pulse {
+  animation: subtle-pulse 2.5s infinite ease-in-out;
+}
