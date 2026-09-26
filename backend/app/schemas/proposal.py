@@ -20,6 +20,20 @@ class ProposalClause(BaseModel):
     content: str
     agreed_value: str
 
+class GroundingMetadata(BaseModel):
+    source_policy_id: str = Field(..., description="ID of the policy envelope grounding this proposal")
+    envelope_clause_ref: str = Field(..., description="Specific policy clause constraint applied")
+    batna_ref: str = Field(..., description="Reference to BATNA boundary enforced")
+    governing_rule_id: str = Field(..., description="Rule ID preventing boundary violation")
+    evidence_chain_hash: Optional[str] = Field(None, description="SHA-256 hash of the evidence context")
+
+class TokenMetrics(BaseModel):
+    prompt_tokens: int = Field(default=0, description="Tokens consumed in prompt")
+    completion_tokens: int = Field(default=0, description="Tokens consumed in completion")
+    total_tokens: int = Field(default=0, description="Total token consumption")
+    estimated_cost_usd: float = Field(default=0.0, description="Estimated inference cost in USD")
+    is_cached: bool = Field(default=False, description="Whether response utilized cache")
+
 class ProposalCreate(BaseModel):
     actor: Literal["BUYER", "SUPPLIER"]
     round_number: int
@@ -33,6 +47,8 @@ class ProposalCreate(BaseModel):
     rationale: Optional[str] = None
     is_acceptance: bool = False
     clauses: List[ProposalClause] = Field(default_factory=list)
+    grounding: Optional[GroundingMetadata] = Field(None, description="Cryptographic & policy grounding attribution")
+    token_metrics: Optional[TokenMetrics] = Field(None, description="Token consumption & costing telemetry")
 
 class ProposalResponse(ProposalCreate):
     id: str
