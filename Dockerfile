@@ -1,5 +1,5 @@
-# Multi-stage production build for NEGOTIA
-FROM python:3.11-slim as backend-builder
+# Production multi-stage build for NEGOTIA
+FROM python:3.11-slim AS backend-builder
 
 WORKDIR /app
 
@@ -17,7 +17,8 @@ WORKDIR /app/backend
 
 ENV PYTHONPATH=/app/backend
 ENV PYTHONUNBUFFERED=1
+ENV PORT=10000
 
-EXPOSE 8000
+EXPOSE 10000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"]
