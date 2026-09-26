@@ -26,6 +26,10 @@ class GroundingMetadata(BaseModel):
     batna_ref: str = Field(..., description="Reference to BATNA boundary enforced")
     governing_rule_id: str = Field(..., description="Rule ID preventing boundary violation")
     evidence_chain_hash: Optional[str] = Field(None, description="SHA-256 hash of the evidence context")
+    prompt_version: str = Field(default="v2.1.0", description="Version of system prompt used")
+    confidence_score: float = Field(default=0.98, description="Uncertainty quantification score (0.0 - 1.0)")
+    uncertainty_rating: Literal["LOW", "MEDIUM", "HIGH"] = Field(default="LOW", description="Uncertainty classification tier")
+    confidence_reason: Optional[str] = Field(default="Fully grounded in policy bounds", description="Verification explanation")
 
 class TokenMetrics(BaseModel):
     prompt_tokens: int = Field(default=0, description="Tokens consumed in prompt")

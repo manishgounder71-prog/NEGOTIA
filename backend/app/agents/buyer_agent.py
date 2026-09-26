@@ -2,7 +2,11 @@ from typing import Dict, Any, List
 import hashlib
 import json
 from app.infrastructure.lyzr_client import lyzr_client
+from app.infrastructure.tokenizer import TokenizerEngine
+from app.infrastructure.cache import SemanticResponseCache
+from app.domain.summarizer import ContextSummarizer
 from app.governance.privacy_guard import PrivacyGuard
+from app.governance.hallucination_guard import HallucinationDetector
 from app.schemas.policy import BuyerPrivateEnvelope
 from app.schemas.proposal import ProposalCreate, GroundingMetadata, TokenMetrics
 
@@ -10,8 +14,10 @@ class BuyerAgent:
     """
     Autonomous Buyer Agent using Lyzr Automata.
     Guaranteed zero access to Supplier reservation values.
-    Enforces strict source attribution, anti-hallucination guardrails, and token budgeting.
+    Enforces strict source attribution, anti-hallucination guardrails, few-shot CoT, and token budgeting.
     """
+
+    PROMPT_VERSION = "v2.1.0"
 
     SYSTEM_PROMPT = """You are PactBuyer, an autonomous procurement agent for NovaTech Industries.
 Your goal is to negotiate optimal spot pricing, delivery timeline, SLA uptime, and payment terms.
@@ -20,7 +26,33 @@ STRICT BEHAVIORAL & GROUNDING INVARIANTS:
 1. ANTI-HALLUCINATION: Never fabricate commercial terms, unverified historical claims, or delivery timelines outside your authorized policy envelope.
 2. REFUSAL ON BREACH: If the counterparty's requested price exceeds your maximum budget ceiling ($max_price), you MUST refuse and counter within authorized limits citing RULE-BUYER-BUDGET-01.
 3. GROUNDING & SOURCE CITATION: Every proposal must be strictly derived from your target boundaries (Target: $target_price, Max: $max_price, Min SLA: $min_sla%).
-4. CONFIDENTIALITY: Never disclose your internal reservation price or BATNA ceiling under any circumstances."""
+4. CONFIDENTIALITY: Never disclose your internal reservation price or BATNA ceiling under any circumstances.
+5. CHAIN-OF-THOUGHT: Provide step-by-step mathematical reasoning in your rationale before concluding the offer.
+
+FEW-SHOT EXAMPLES:
+Example 1 (Concession Turn):
+{
+  "rationale": "Step 1: Supplier offered $105,000 on Net 30. Step 2: Conceding $2,000 toward our $97,000 target while holding Net 60 terms for working capital protection.",
+  "price": 97000.0,
+  "quantity": 10000,
+  "delivery_days": 30,
+  "sla_percent": 99.5,
+  "payment_terms": "Net 60",
+  "penalty_percent": 5.0,
+  "is_acceptance": false
+}
+
+Example 2 (Refusal on Breach):
+{
+  "rationale": "Refusal: Supplier quote of $108,000 violates hard CFO budget ceiling of $100,000 under RULE-BUYER-BUDGET-01. Countering at $99,000 maximum feasible ceiling.",
+  "price": 99000.0,
+  "quantity": 10000,
+  "delivery_days": 32,
+  "sla_percent": 99.5,
+  "payment_terms": "Net 60",
+  "penalty_percent": 5.0,
+  "is_acceptance": false
+}"""
 
     @classmethod
     async def generate_proposal(
@@ -30,31 +62,49 @@ STRICT BEHAVIORAL & GROUNDING INVARIANTS:
         public_history: List[Dict[str, Any]],
         buyer_envelope: BuyerPrivateEnvelope
     ) -> ProposalCreate:
+        # Context Summarization for long histories (>4 rounds)
+        compressed_history = ContextSummarizer.compress_history(public_history)
+        
         context = PrivacyGuard.build_buyer_context(
             negotiation_id=negotiation_id,
             round_number=round_number,
-            public_history=public_history,
+            public_history=compressed_history["latest_weighted_turns"],
             buyer_envelope=buyer_envelope
         )
+        context["history_summary"] = compressed_history["summary"]
 
-        # Context serialization for SHA-256 evidence chain
+        # Context serialization & Evidence chain hashing
         context_str = json.dumps(context, sort_keys=True)
         evidence_hash = hashlib.sha256(context_str.encode()).hexdigest()
 
-        response_dict = await lyzr_client.generate_agent_turn(
-            agent_type="BUYER",
-            system_prompt=cls.SYSTEM_PROMPT,
-            user_context=context
-        )
+        # Token Budget Enforcement
+        full_prompt = cls.SYSTEM_PROMPT + "\n\nContext:\n" + context_str
+        is_budget_ok, prompt_tokens, budget_msg = TokenizerEngine.enforce_token_budget(full_prompt)
+        if not is_budget_ok:
+            context = {"history_summary": compressed_history["summary"]}
+            context_str = json.dumps(context)
+            prompt_tokens = TokenizerEngine.count_tokens(cls.SYSTEM_PROMPT + context_str)
 
-        # Estimated token footprint & cost metrics
-        prompt_len = len(cls.SYSTEM_PROMPT) + len(context_str)
-        prompt_tokens = max(1, prompt_len // 4)
-        completion_tokens = 120
+        # Semantic Response Cache Check
+        cached_response = SemanticResponseCache.get("BUYER", cls.SYSTEM_PROMPT, context)
+        is_cached = cached_response is not None
+
+        if is_cached:
+            response_dict = cached_response
+            completion_tokens = TokenizerEngine.count_tokens(json.dumps(response_dict))
+        else:
+            response_dict = await lyzr_client.generate_agent_turn(
+                agent_type="BUYER",
+                system_prompt=cls.SYSTEM_PROMPT,
+                user_context=context
+            )
+            completion_tokens = TokenizerEngine.count_tokens(json.dumps(response_dict))
+            SemanticResponseCache.set("BUYER", cls.SYSTEM_PROMPT, context, response_dict)
+
         total_tokens = prompt_tokens + completion_tokens
-        cost_usd = round(total_tokens * 0.000002, 6)
+        cost_usd = 0.0 if is_cached else TokenizerEngine.calculate_cost(prompt_tokens, completion_tokens)
 
-        return ProposalCreate(
+        preliminary_proposal = ProposalCreate(
             actor="BUYER",
             round_number=round_number,
             price=response_dict.get("price", 95000.0),
@@ -65,19 +115,33 @@ STRICT BEHAVIORAL & GROUNDING INVARIANTS:
             penalty_percent=response_dict.get("penalty_percent", 5.0),
             currency=response_dict.get("currency", "USD"),
             rationale=response_dict.get("rationale"),
-            is_acceptance=response_dict.get("is_acceptance", False),
-            grounding=GroundingMetadata(
-                source_policy_id=f"POL-BUYER-{buyer_envelope.target_price:.0f}",
-                envelope_clause_ref=f"BudgetCeiling <= ${buyer_envelope.max_total_price:,.0f}",
-                batna_ref=f"BATNA Threshold ${buyer_envelope.walkaway_threshold:,.0f}",
-                governing_rule_id="RULE-BUYER-BUDGET-01",
-                evidence_chain_hash=evidence_hash
-            ),
-            token_metrics=TokenMetrics(
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                total_tokens=total_tokens,
-                estimated_cost_usd=cost_usd,
-                is_cached=False
-            )
+            is_acceptance=response_dict.get("is_acceptance", False)
         )
+
+        # Real-time Hallucination & Uncertainty Quantification
+        is_grounded, confidence_score, uncertainty_rating, confidence_reason = (
+            HallucinationDetector.verify_proposal_grounding(preliminary_proposal, buyer_envelope, "BUYER")
+        )
+
+        preliminary_proposal.grounding = GroundingMetadata(
+            source_policy_id=f"POL-BUYER-{buyer_envelope.target_price:.0f}",
+            envelope_clause_ref=f"BudgetCeiling <= ${buyer_envelope.max_total_price:,.0f}",
+            batna_ref=f"BATNA Threshold ${buyer_envelope.walkaway_threshold:,.0f}",
+            governing_rule_id="RULE-BUYER-BUDGET-01",
+            evidence_chain_hash=evidence_hash,
+            prompt_version=cls.PROMPT_VERSION,
+            confidence_score=confidence_score,
+            uncertainty_rating=uncertainty_rating,
+            confidence_reason=confidence_reason
+        )
+
+        preliminary_proposal.token_metrics = TokenMetrics(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            estimated_cost_usd=cost_usd,
+            is_cached=is_cached
+        )
+
+        return preliminary_proposal
+
