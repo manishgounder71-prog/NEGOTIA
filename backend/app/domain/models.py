@@ -20,8 +20,8 @@ class Organization(Base):
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False)
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(64), nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)
@@ -32,7 +32,7 @@ class User(Base):
 class Supplier(Base):
     __tablename__ = "suppliers"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
+    id = Column(String(64), primary_key=True, default=generate_uuid)
     name = Column(String(255), nullable=False)
     category = Column(String(255), nullable=False)
     contact_email = Column(String(255), nullable=False)
@@ -46,8 +46,8 @@ class Supplier(Base):
 class Negotiation(Base):
     __tablename__ = "negotiations"
 
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False)
+    id = Column(String(64), primary_key=True, default=generate_uuid)
+    organization_id = Column(String(64), nullable=False, index=True)
     title = Column(String(255), nullable=False)
     category = Column(String(255), nullable=False)
     buyer_name = Column(String(255), nullable=False)
