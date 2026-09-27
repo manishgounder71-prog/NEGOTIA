@@ -6,8 +6,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0-009688.svg)](https://fastapi.tiangolo.com)
 [![React 19](https://img.shields.io/badge/React-19.0-61DAFB.svg)](https://react.dev/)
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind-v4.0-38B2AC.svg)](https://tailwindcss.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests Passing](https://img.shields.io/badge/tests-20%2F20%20passing-brightgreen.svg)]()
+[![Tests Passing](https://img.shields.io/badge/tests-26%2F26%20passing-brightgreen.svg)]()
 
 ---
 
@@ -201,7 +200,7 @@ A complete GitHub Actions pipeline is active under `.github/workflows/ci.yml` ru
 
 ## 9. Verification & Test Suite
 
-All 20 unit, integration, and security regression tests run in under 2 seconds:
+All 26 unit, integration, and security regression tests run in under 4 seconds:
 
 ```bash
 cd backend
