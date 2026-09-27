@@ -13,7 +13,7 @@ async def setup_test_database():
     yield
     await async_engine.dispose()
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="session")
 async def db_session():
     async with AsyncSessionLocal() as session:
         yield session
