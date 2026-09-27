@@ -1,6 +1,18 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, model_validator
 from typing import List, Optional
+import os
+import logging
+
+logger = logging.getLogger("negotia.config")
+
+INSECURE_SECRET_DEFAULTS = {
+    "negotia-super-secret-enterprise-key-2026",
+    "negotia-super-secret-enterprise-production-key-2026",
+    "secret",
+    "changeme",
+    "default-jwt-secret"
+}
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -50,5 +62,16 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "*"
     ]
+
+    @model_validator(mode="after")
+    def validate_production_secrets(self) -> "Settings":
+        env = (self.ENVIRONMENT or "development").lower()
+        if env in {"production", "prod", "staging"}:
+            if not self.JWT_SECRET or self.JWT_SECRET in INSECURE_SECRET_DEFAULTS:
+                raise ValueError(
+                    f"CRITICAL SECURITY CONFIGURATION ERROR: Insecure or default JWT_SECRET detected in '{self.ENVIRONMENT}' environment. "
+                    "You must provide a unique, cryptographically strong JWT_SECRET environment variable."
+                )
+        return self
 
 settings = Settings()
