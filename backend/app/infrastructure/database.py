@@ -12,6 +12,8 @@ def normalize_async_database_url(url: str) -> str:
         return url.replace("postgresql://", "postgresql+asyncpg://", 1)
     return url
 
+from sqlalchemy.pool import NullPool
+
 # Base for models
 Base = declarative_base()
 
@@ -24,7 +26,9 @@ engine_kwargs = {
     "future": True,
 }
 
-if is_sqlite:
+if settings.ENVIRONMENT == "test":
+    engine_kwargs["poolclass"] = NullPool
+elif is_sqlite:
     engine_kwargs["connect_args"] = {"check_same_thread": False}
 else:
     # High-performance enterprise pooling for hosted PostgreSQL / multi-region clusters

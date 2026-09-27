@@ -17,5 +17,4 @@ async def setup_test_database():
 async def db_session():
     async with AsyncSessionLocal() as session:
         yield session
-        await session.rollback()
 
